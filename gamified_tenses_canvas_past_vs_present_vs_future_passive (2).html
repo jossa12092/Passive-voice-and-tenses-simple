@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gamified Tenses Arena · Past / Present / Future · Passive Voice</title>
+  <style>
+    :root{
+      --bg:#0f172a;          /* slate-900 */
+      --card:#111827ee;      /* gray-900 */
+      --ink:#e5e7eb;         /* gray-200 */
+      --muted:#94a3b8;       /* slate-400 */
+      --accent:#22d3ee;      /* cyan-400 */
+      --accent2:#a78bfa;     /* violet-400 */
+      --good:#22c55e;        /* green-500 */
+      --bad:#ef4444;         /* red-500 */
+      --warn:#f59e0b;        /* amber-500 */
+      --shadow: 0 10px 30px rgba(0,0,0,.55);
+      --radius: 22px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; background: radial-gradient(1200px 700px at 20% 0%, #1e293b 0%, var(--bg) 60%);
+      color:var(--ink); font-family:system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    }
+    .app{
+      display:grid; grid-template-rows:auto 1fr auto; min-height:100vh; gap:16px; padding:16px; max-width:1200px; margin:0 auto;
+    }
+    header{display:grid; grid-template-columns: 220px 1fr 220px; gap:16px; align-items:center}
+    .brand{display:flex; align-items:center; gap:12px}
+    .brand h1{font-size:18px; margin:0; letter-spacing:.5px}
+    .panel{background:linear-gradient(135deg, #0b1220 0%, #0e1628 100%); border:1px solid #1f2937; border-radius:var(--radius); padding:12px 16px; box-shadow:var(--shadow)}
+    .stats{display:flex; justify-content:space-between; gap:14px; align-items:center}
+    .stat{font-size:14px; color:var(--muted)}
+    .stat strong{color:var(--ink)}
+    .timerWrap{position:relative; height:22px; background:#0b1220; border:1px solid #1f2937; border-radius:14px; overflow:hidden}
+    .timerBar{position:absolute; inset:0; width:100%; transform-origin:left center;}
+    .timerBar .fill{position:absolute; inset:0; background:linear-gradient(90deg, var(--accent), var(--accent2));}
+
+    main{display:grid; grid-template-columns: 1.05fr .95fr; gap:16px}
+    .play{display:grid; grid-template-rows:auto 1fr auto; gap:12px}
+    .canvasCard{padding:0; overflow:hidden}
+    #hudCanvas{display:block; width:100%; height:210px; background:radial-gradient(500px 260px at 50% -60%, #0ea5b814, transparent 70%);}
+
+    .qcard{display:grid; grid-template-rows:auto 1fr auto; gap:12px}
+    .qTitle{font-size:18px; line-height:1.3; margin:0}
+    .answers{display:grid; gap:10px}
+    .answerBtn, .chip{
+      border:1px solid #243244; background:#0b1220; color:var(--ink); padding:14px 16px; border-radius:14px; font-size:16px; cursor:pointer; transition:transform .04s ease, border-color .15s ease, background .15s ease;
+    }
+    .answerBtn:hover{border-color:#334155}
+    .answerBtn.correct{background:#052e1a; border-color:#14532d}
+    .answerBtn.wrong{background:#3b0a0a; border-color:#7f1d1d}
+    .answerBtn:disabled{opacity:.8; cursor:not-allowed}
+
+    /* MATCHING (no drag) */
+    .matching{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+    .list{display:grid; gap:10px}
+    .chip{display:flex; align-items:center; justify-content:space-between}
+    .chip.selected{outline:2px solid var(--accent)}
+
+    /* ORDERING (no drag) */
+    .ordering{display:grid; gap:10px}
+    .ordRow{display:grid; grid-template-columns: 1fr 120px; gap:10px; align-items:center}
+    select{padding:10px; border-radius:10px; border:1px solid #233143; background:#0b1220; color:var(--ink)}
+
+    .feedback{font-size:15px; color:var(--muted)}
+    .footerBtns{display:flex; justify-content:space-between; align-items:center}
+    .btn{border:1px solid #1f2937; background:linear-gradient(135deg,#0f172a,#0b1220); padding:12px 16px; border-radius:12px; color:var(--ink); cursor:pointer}
+
+    aside{display:grid; grid-template-rows:auto auto 1fr; gap:12px}
+    .rules{font-size:14px; color:var(--muted)}
+
+    .writing{display:grid; gap:10px}
+    textarea{min-height:210px; resize:vertical; padding:12px; border-radius:14px; border:1px solid #223045; background:#0b1220; color:var(--ink); font-size:16px}
+    .danger{color:var(--bad)}
+    .success{color:var(--good)}
+    .warning{color:var(--warn)}
+
+    .scoreBig{font-size:40px; text-align:center; margin:0}
+
+    @media (max-width: 980px){
+      main{grid-template-columns:1fr}
+      header{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="panel brand" aria-label="Brand and progress">
+      <canvas id="ring" width="96" height="96" aria-hidden="true"></canvas>
+      <div>
+        <h1>Grammar Arena · Tenses & Passive</h1>
+        <div class="stat">Questions: <strong id="qProg">0 / 30</strong></div>
+        <div class="stat">Lives (attempts): <strong id="lives">∞ (one try per item)</strong></div>
+      </div>
+    </div>
+    <div class="panel stats">
+      <div class="stat">Per‑question time: <strong>60s</strong></div>
+      
+      <div class="stat">Mode: <strong>No drag — select only</strong></div>
+      <div class="stat">Score: <strong id="score">0</strong></div>
+    </div>
+    <div class="panel">
+      <div class="timerWrap" aria-label="Timer">
+        <div class="timerBar"><div class="fill" id="timeFill"></div></div>
+      </div>
+      <div class="stat" style="margin-top:8px">Time left: <strong id="timeLeft">--</strong></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="play">
+      <div class="panel canvasCard">
+        <canvas id="hudCanvas" width="1200" height="210" aria-label="Heads-up display canvas"></canvas>
+      </div>
+      <div class="panel qcard" id="qCard" aria-live="polite">
+        <h2 class="qTitle" id="qTitle">Loading…</h2>
+        <div id="qBody"></div>
+        <div class="footerBtns">
+          <div class="feedback" id="feedback"></div>
+          <button class="btn" id="nextBtn" disabled>Next ▶</button>
+        </div>
+      </div>
+      <div class="panel" id="resultPanel" hidden>
+        <h2 class="scoreBig" id="finalScore"></h2>
+        <p class="stat" id="finalDetails"></p>
+        <button class="btn" onclick="location.reload()">Restart</button>
+      </div>
+    </section>
+
+    <aside>
+      <div class="panel rules">
+        <strong>Goal:</strong> Identify and use <em>Past Simple</em>, <em>Present Simple</em>, <em>Future Simple</em>, and the <em>Passive Voice</em> (present & past).<br/>
+        <strong>One‑shot rule:</strong> you have one chance per item. A wrong move jumps to the next.
+      </div>
+      
+        <button class="btn" id="submitWriting">Submit Writing</button>
+      </div>
+      <div class="panel rules">
+        <strong>Tips:</strong>
+        <ul>
+          <li>Present Simple passive: <em>is/are + past participle</em>.</li>
+          <li>Past Simple passive: <em>was/were + past participle</em>.</li>
+          <li>Future Simple: <em>will + base verb</em>.</li>
+          <li>Active → Passive: move the object to subject position; keep the tense.</li>
+        </ul>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="panel" style="text-align:center; font-size:13px; color:var(--muted)">
+    © Grammar Arena — HTML5 Canvas + JavaScript. No commas added to prompts or UI labels by request.
+  </footer>
+</div>
+
+<script>
+// ====== Grammar Arena (revised) — all writing tasks moved into quiz ======
+const hud = document.getElementById('hudCanvas');
+const hctx = hud.getContext('2d');
+function drawHUD(title, subtitle){
+  const w = hud.width, h = hud.height;
+  hctx.clearRect(0,0,w,h);
+  const grad = hctx.createLinearGradient(0,0,w,0);
+  grad.addColorStop(0,'#0ea5b833'); grad.addColorStop(.5,'#a78bfa33'); grad.addColorStop(1,'#22d3ee33');
+  hctx.fillStyle = grad; hctx.fillRect(0,0,w,h);
+  hctx.fillStyle = '#e5e7eb'; hctx.font = '700 22px system-ui,Segoe UI,Roboto,Arial';
+  hctx.fillText(title, 24, 42);
+  hctx.fillStyle = '#94a3b8'; hctx.font = '16px system-ui,Segoe UI,Roboto,Arial';
+  wrapText(subtitle, 24, 72, w-48, 22);
+}
+function wrapText(text, x, y, maxWidth, lineHeight){
+  const words = text.split(' ');
+  let line = ''; let yy = y;
+  for(let n=0;n<words.length;n++){
+    const test = line + words[n] + ' ';
+    const w = hctx.measureText(test).width;
+    if(w > maxWidth && n>0){ hctx.fillText(line, x, yy); line = words[n] + ' '; yy += lineHeight; }
+    else line = test;
+  }
+  hctx.fillText(line, x, yy);
+}
+
+// Progress ring
+const ring = document.getElementById('ring');
+const rctx = ring.getContext('2d');
+function drawRing(p){
+  const cx=48, cy=48, radius=40;
+  rctx.clearRect(0,0,96,96);
+  rctx.strokeStyle = '#1f2937'; rctx.lineWidth=10; rctx.beginPath(); rctx.arc(cx,cy,radius,0,Math.PI*2); rctx.stroke();
+  const grd = rctx.createLinearGradient(0,0,96,0); grd.addColorStop(0,'#22d3ee'); grd.addColorStop(1,'#a78bfa');
+  rctx.strokeStyle = grd; rctx.lineCap='round'; rctx.beginPath(); rctx.arc(cx,cy,radius,-Math.PI/2, -Math.PI/2 + Math.PI*2*p); rctx.stroke();
+}
+
+// Timer
+const timeFill = document.getElementById('timeFill');
+const timeLeftEl = document.getElementById('timeLeft');
+let timerInterval = null, timeTotal=60, timeLeft=60;
+function startTimer(seconds, onExpire){
+  clearInterval(timerInterval);
+  timeTotal = seconds; timeLeft = seconds; renderTimer();
+  timerInterval = setInterval(()=>{ timeLeft--; renderTimer(); if(timeLeft<=0){ clearInterval(timerInterval); onExpire && onExpire(); } }, 1000);
+}
+function renderTimer(){
+  const pct = Math.max(0, timeLeft)/timeTotal; timeFill.style.transform = `scaleX(${pct})`;
+  timeLeftEl.textContent = `${Math.max(0, timeLeft)}s`;
+}
+
+// Core nodes
+const qTitle = document.getElementById('qTitle');
+const qBody = document.getElementById('qBody');
+const nextBtn = document.getElementById('nextBtn');
+const feedback = document.getElementById('feedback');
+const qProg = document.getElementById('qProg');
+const scoreEl = document.getElementById('score');
+
+let current = 0; let score=0; let answered=false; let zeroed=false;
+
+function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+// Small irregular map for writing checks
+const PARTICIPLES = { speak:'spoken', write:'written', eat:'eaten', take:'taken', make:'made', see:'seen', give:'given', go:'gone', do:'done', buy:'bought', teach:'taught' };
+function pastParticiple(base){ return PARTICIPLES[base] || (base.endsWith('e') ? base+'d' : base+'ed'); }
+
+// ======= BANK (exactly 30 items) =======
+const BANK = [
+  {type:'identify', prompt:'Choose the tense: "He studies at university."', options:['Present Simple','Past Simple','Future Simple'], correct:[0]},
+  {type:'identify', prompt:'Choose the tense: "She will visit Bogotá next month."', options:['Past Simple','Future Simple','Present Simple'], correct:[1]},
+  {type:'identify', prompt:'Choose the tense: "They finished the report yesterday."', options:['Present Simple','Future Simple','Past Simple'], correct:[2]},
+  {type:'single', prompt:'Pick the correct form (Present Simple): ___ coffee every morning.', options:['I drink','I drank','I will drink'], correct:[0]},
+  {type:'single', prompt:'Pick the correct form (Past Simple): We ___ the meeting last Friday.', options:['hold','held','will hold'], correct:[1]},
+  {type:'single', prompt:'Pick the correct form (Future Simple): The team ___ a demo next week.', options:['gives','gave','will give'], correct:[2]},
+  {type:'multi', prompt:'Select all sentences in the Past Simple.', options:['I watched a movie.','She works on weekends.','They arrived late.','He will call later.'], correct:[0,2]},
+  {type:'multi', prompt:'Select all Present Simple facts.', options:['Water boils at 100°C.','I visited Cali.','We start at 8 a.m.','She will arrive at noon.'], correct:[0,2]},
+  {type:'multi', prompt:'Select all Future Simple predictions.', options:['It will rain tomorrow.','They bought tickets.','I will help you.','She cooks pasta.'], correct:[0,2]},
+  {type:'identify', prompt:'Pick the passive (Present Simple):', options:['The report is reviewed every week.','They review the report every week.','They will review the report.'], correct:[0]},
+  {type:'identify', prompt:'Pick the passive (Past Simple):', options:['The emails were sent yesterday.','They send the emails.','They will send the emails.'], correct:[0]},
+  {type:'single', prompt:'Choose the correct passive (Past Simple): "The chef cooked the meal."', options:['The meal was cooked.','The meal is cooked.','The meal will be cooked.'], correct:[0]},
+  {type:'single', prompt:'Choose the correct passive (Present Simple): "People watch the series."', options:['The series is watched.','The series was watched.','The series will be watched.'], correct:[0]},
+  {type:'matching', prompt:'Match the clause to its tense (no drag). One click on left + one on right.', left:['She writes emails.','He fixed the car.','They will open the store.','The files are checked.'], right:['Present Simple','Past Simple','Future Simple','Present Simple Passive'], pairs:[[0,0],[1,1],[2,2],[3,3]]},
+  {type:'matching', prompt:'Match the action to passive form (tense aware).', left:['The manager approves requests.','The engineer repaired devices.','The team will publish results.'], right:['Devices were repaired.','Requests are approved.','Results will be published.'], pairs:[[0,1],[1,0],[2,2]]},
+  {type:'ordering', prompt:'Order to form a correct Present Simple sentence.', parts:['every day','reads','She','articles'], order:[2,1,3,0]},
+  {type:'ordering', prompt:'Order to form a correct Past Simple sentence.', parts:['at 7','left','They','yesterday'], order:[2,1,3,0]},
+  {type:'identify', prompt:'Choose the tense: "Will you join us?"', options:['Present Simple','Past Simple','Future Simple'], correct:[2]},
+  {type:'identify', prompt:'Choose the tense: "Did he call you?"', options:['Future Simple','Past Simple','Present Simple'], correct:[1]},
+  {type:'identify', prompt:'Choose the tense: "Do they live near here?"', options:['Present Simple','Past Simple','Future Simple'], correct:[0]},
+  {type:'multi', prompt:'Select all Future Simple forms.', options:['We will study.','He works hard.','Will she stay?','They stayed.'], correct:[0,2]},
+  {type:'multi', prompt:'Select all Present Simple forms.', options:['Does it help?','They helped yesterday.','She helps a lot.','I will help later.'], correct:[0,2]},
+  {type:'multi', prompt:'Select all Past Simple forms.', options:['He arrived late.','They arrive early.','We will arrive soon.','Did you arrive on time?'], correct:[0,3]},
+  {type:'single', prompt:'Pick the passive (Past Simple): Yesterday, the contract ___.', options:['was signed','is signed','will be signed'], correct:[0]},
+  {type:'single', prompt:'Pick the passive (Present Simple): In this lab, samples ___.', options:['are tested','were tested','will be tested'], correct:[0]},
+  {type:'matching', prompt:'Match sentence to label.', left:['The report is finalized every Friday.','They finalized the report last Friday.','They will finalize the report next Friday.'], right:['Present Simple Passive','Past Simple Active','Future Simple Active'], pairs:[[0,0],[1,1],[2,2]]},
+  {type:'ordering', prompt:'Order to form a correct Future Simple question.', parts:['join us','you','Will'], order:[2,1,0]},
+  {type:'ordering', prompt:'Order to form a correct Past Simple question.', parts:['they','yesterday','Did','arrive'], order:[2,0,3,1]},
+  {type:'identify', prompt:'Choose the tense: "The letters are delivered daily."', options:['Present Simple Passive','Past Simple Passive','Future Simple Passive'], correct:[0]},
+  {type:'identify', prompt:'Choose the tense: "The letters were delivered yesterday."', options:['Present Simple Passive','Past Simple Passive','Future Simple Passive'], correct:[1]},
+  // ===== Writing items (Active -> Passive) as separate questions (20 min each) =====
+  {type:'writePassive', active:'The technician fixed the server last night.', target:'past', base:'fix'},
+  {type:'writePassive', active:'People speak English worldwide.', target:'present', base:'speak'},
+  {type:'writePassive', active:'The manager approves requests every day.', target:'present', base:'approve'}
+];
+
+// Randomize options for choice-style items
+function randomizeOptions(q){
+  if(q.type==='single' || q.type==='identify' || q.type==='multi'){
+    const idxs=[...q.options.keys()]; const shuffled=shuffle(idxs);
+    q.options = shuffled.map(i=>q.options[i]);
+    const newCorrect=[]; q.correct.forEach(c=> newCorrect.push(shuffled.indexOf(c)) );
+    q.correct = newCorrect.sort((a,b)=>a-b);
+  }
+}
+BANK.forEach(q=>randomizeOptions(q));
+
+function renderQuestion(){
+  if(current >= BANK.length){ endQuiz(); return; }
+  const q = BANK[current]; answered=false; nextBtn.disabled=true; feedback.textContent='';
+  qTitle.textContent = `Q${current+1}. ${q.prompt || 'Convert to Passive'}`;
+  qBody.innerHTML='';
+  drawHUD(q.prompt || q.active, 'One attempt only. Wrong = auto next.');
+  drawRing((current)/BANK.length);
+  document.getElementById('qProg').textContent = `${current} / ${BANK.length}`;
+
+  if(q.type==='writePassive'){
+    // 20 minute timer per writing item
+    startTimer(20*60, ()=>{ markWrong('Time is up'); setTimeout(()=>{ current++; renderQuestion(); }, 700); });
+    const wrap = document.createElement('div');
+    const instr = document.createElement('p'); instr.className='feedback'; instr.textContent = 'Rewrite in the Passive Voice using the indicated tense. No paste allowed.';
+    const sentence = document.createElement('div'); sentence.className='chip'; sentence.textContent = `Active: ${q.active}  · Target: ${q.target.toUpperCase()} simple passive`;
+    const ta = document.createElement('textarea'); ta.placeholder = 'Type the passive sentence here.';
+    // Anti-paste policy across writing items — paste => total score 0 and end
+    function flagZero(){ if(zeroed) return; zeroed=true; feedback.innerHTML = '<span class="danger">Paste detected → score set to 0.0</span>'; ta.disabled=true; nextBtn.disabled=true; endQuiz(); }
+    ta.addEventListener('paste', (e)=>{ e.preventDefault(); flagZero(); });
+    ta.addEventListener('contextmenu', (e)=>{ e.preventDefault(); });
+    ta.addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && (e.key==='v' || e.key==='V')){ e.preventDefault(); flagZero(); } });
+    ta.addEventListener('mousedown', (e)=>{ if(e.button===1){ e.preventDefault(); flagZero(); }});
+
+    const submit = document.createElement('button'); submit.className='btn'; submit.textContent='Submit passive';
+    submit.onclick = ()=>{
+      if(answered) return; answered=true; clearInterval(timerInterval);
+      const txt = (ta.value||'').trim().toLowerCase();
+      const pp = pastParticiple(q.base);
+      let ok=false;
+      if(q.target==='present') ok = /(is|are)/.test(txt) && new RegExp(`\b${pp}\b`).test(txt);
+      if(q.target==='past') ok = /(was|were)/.test(txt) && new RegExp(`\b${pp}\b`).test(txt);
+      score += ok?1:0; scoreEl.textContent = score;
+      feedback.innerHTML = ok? '<span class="success">Passive form accepted.</span>' : '<span class="danger">Incorrect passive.</span>';
+      nextBtn.disabled=false; autoAdvance();
+    };
+    wrap.append(instr, sentence, ta, submit); qBody.appendChild(wrap);
+    return;
+  }
+
+  // 60s for standard items
+  startTimer(60, ()=>{ markWrong('Time is up'); setTimeout(()=>{ current++; renderQuestion(); }, 700); });
+
+  if(q.type==='single' || q.type==='identify'){
+    const wrap=document.createElement('div'); wrap.className='answers';
+    q.options.forEach((opt,i)=>{ const b=document.createElement('button'); b.className='answerBtn'; b.textContent=opt; b.onclick=()=>handleSingle(i,q); wrap.appendChild(b); });
+    qBody.appendChild(wrap);
+  }
+  else if(q.type==='multi'){
+    const wrap=document.createElement('div'); wrap.className='answers'; const picks=new Set();
+    q.options.forEach((opt,i)=>{ const b=document.createElement('button'); b.className='answerBtn'; b.textContent=opt; b.onclick=()=>{ if(answered) return; if(picks.has(i)){ picks.delete(i); b.classList.remove('selected'); b.style.outline=''; } else { picks.add(i); b.classList.add('selected'); b.style.outline='2px solid var(--accent)'; } }; wrap.appendChild(b); });
+    const submit=document.createElement('button'); submit.className='btn'; submit.textContent='Submit selection';
+    submit.onclick=()=>{ if(answered) return; answered=true; clearInterval(timerInterval); const arr=[...picks].sort((a,b)=>a-b); const ok=JSON.stringify(arr)===JSON.stringify(q.correct); score+=ok?1:0; scoreEl.textContent=score; feedback.innerHTML= ok? '<span class="success">Correct.</span>':'<span class="danger">Wrong.</span>'; nextBtn.disabled=false; autoAdvance(); };
+    qBody.append(wrap, submit);
+  }
+  else if(q.type==='matching'){
+    const grid=document.createElement('div'); grid.className='matching'; const left=document.createElement('div'); left.className='list'; const right=document.createElement('div'); right.className='list';
+    const leftOrder=shuffle(q.left.map((t,i)=>({t,i}))); const rightOrder=shuffle(q.right.map((t,i)=>({t,i})));
+    let selL=null, selR=null; let made=0; let wrong=false;
+    function check(){ if(selL==null||selR==null) return; const ok=q.pairs.some(([li,ri])=> li===leftOrder[selL].i && ri===rightOrder[selR].i ); if(!ok){ wrong=true; finalize(false); return; } made++; left.children[selL].classList.add('success'); left.children[selL].style.opacity=.6; left.children[selL].onclick=null; right.children[selR].classList.add('success'); right.children[selR].style.opacity=.6; right.children[selR].onclick=null; selL=null; selR=null; if(made===q.pairs.length) finalize(true); }
+    function finalize(ok){ answered=true; clearInterval(timerInterval); score+=ok?1:0; scoreEl.textContent=score; feedback.innerHTML= ok?'<span class="success">All pairs matched.</span>':'<span class="danger">Pair mismatch.</span>'; nextBtn.disabled=false; autoAdvance(); }
+    leftOrder.forEach((obj,idx)=>{ const c=document.createElement('button'); c.className='chip'; c.textContent=obj.t; c.onclick=()=>{ if(answered) return; left.querySelectorAll('.chip').forEach(x=>x.classList.remove('selected')); selL=idx; c.classList.add('selected'); check(); }; left.appendChild(c); });
+    rightOrder.forEach((obj,idx)=>{ const c=document.createElement('button'); c.className='chip'; c.textContent=obj.t; c.onclick=()=>{ if(answered) return; right.querySelectorAll('.chip').forEach(x=>x.classList.remove('selected')); selR=idx; c.classList.add('selected'); check(); }; right.appendChild(c); });
+    grid.append(left,right); qBody.appendChild(grid);
+  }
+  else if(q.type==='ordering'){
+    const partsOrder = shuffle(q.parts.map((t,i)=>({t,i}))); const wrapper=document.createElement('div'); wrapper.className='ordering'; const selects=[];
+    partsOrder.forEach((obj)=>{ const line=document.createElement('div'); line.className='ordRow'; const label=document.createElement('div'); label.textContent=obj.t; label.className='chip'; const sel=document.createElement('select'); for(let i=1;i<=q.parts.length;i++){ const op=document.createElement('option'); op.value=i-1; op.textContent=i; sel.appendChild(op);} line.append(label, sel); wrapper.appendChild(line); selects.push(sel); });
+    const submit=document.createElement('button'); submit.className='btn'; submit.textContent='Submit order';
+    submit.onclick=()=>{ if(answered) return; answered=true; clearInterval(timerInterval); const chosen=selects.map(s=>parseInt(s.value,10)); const result=new Array(chosen.length); chosen.forEach((pos,idx)=>{ result[pos]=partsOrder[idx].i; }); const ok=JSON.stringify(result)===JSON.stringify(q.order); score+=ok?1:0; scoreEl.textContent=score; feedback.innerHTML= ok?'<span class="success">Order correct.</span>':'<span class="danger">Incorrect order.</span>'; nextBtn.disabled=false; autoAdvance(); };
+    qBody.append(wrapper, submit);
+  }
+}
+
+function handleSingle(i,q){ if(answered) return; answered=true; clearInterval(timerInterval); const ok=q.correct.includes(i); score+=ok?1:0; scoreEl.textContent=score; const buttons=qBody.querySelectorAll('button'); buttons.forEach((b,idx)=>{ b.disabled=true; if(q.correct.includes(idx)) b.classList.add('correct'); if(idx===i && !ok) b.classList.add('wrong'); }); feedback.innerHTML= ok?'<span class="success">Correct.</span>':'<span class="danger">Wrong.</span>'; nextBtn.disabled=false; autoAdvance(); }
+function markWrong(msg){ answered=true; feedback.innerHTML = `<span class="danger">${msg||'Wrong'}</span>`; nextBtn.disabled=false; }
+function autoAdvance(){ setTimeout(()=>{ current++; renderQuestion(); }, 800); }
+
+function endQuiz(){ clearInterval(timerInterval); drawRing(1); document.getElementById('qProg').textContent = `${BANK.length} / ${BANK.length}`; document.getElementById('qCard').hidden=true; const total=BANK.length; const raw=score; const grade=((raw/total)*4+1).toFixed(1); const final=document.getElementById('finalScore'); final.textContent = zeroed ? 'Final Score: 0.0' : `Final Score: ${grade}`; const det=document.getElementById('finalDetails'); det.textContent = zeroed ? 'Paste attempt detected during writing item.' : `Items correct: ${raw}/${total}. Scale 1.0–5.0.`; document.getElementById('resultPanel').hidden=false; drawHUD('Stage complete','Review your results below.'); }
+
+// Init
+renderQuestion();
+</script>
+</body>
+</html>
